@@ -1,4 +1,4 @@
-import styles from './menu.module.scss';
+import styles from '../menu.module.scss';
 import {faCircleMinus} from "@fortawesome/free-solid-svg-icons";
 import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
 

@@ -1,84 +1,119 @@
-use std::collections::HashMap;
-use regex::Regex;
-use serde::{Deserialize, Serialize};
+use reqwest::{Request, Response};
+use serde::de::DeserializeOwned;
+use serde_json::json;
 use crate::auth_route::errors::AuthError;
+use crate::auth_route::tokens::{CodeToken, MinecraftProfile, MinecraftToken, OAuthToken, XBLToken, XSTSToken};
 use crate::client::{SCOPE, CLIENT_ID, REDIRECT_URI};
 
 const OAUTH_TOKEN_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/token";
-const PARAMS_REGEX: &str = r"[&?]((\w+)=([\w\d\.-]+))";
+const XBL_TOKEN_URL: &str = "https://user.auth.xboxlive.com/user/authenticate";
+const XSTS_TOKEN_URL: &str = "https://xsts.auth.xboxlive.com/xsts/authorize";
+const MINECRAFT_TOKEN_URL: &str = "https://api.minecraftservices.com/authentication/login_with_xbox";
+const MINECRAFT_PROFILE_URL: &str = "https://api.minecraftservices.com/minecraft/profile";
 
+async fn extract_response<T, O>(client: &reqwest::Client, request: Request, err_map: O) -> Result<T, AuthError>
+    where
+        T: DeserializeOwned,
+        O: Fn(String) -> AuthError,
+{
+    let response = client
+        .execute(request)
+        .await
+        .map_err(|err| err_map(err.to_string()))?;
 
-#[derive(Serialize, Deserialize)]
-struct OAuthTokenResponse {
-    access_token: String,
-    expires_in: u64,
-    scope: String,
-    refresh_token: String,
-    id_token: String,
+    let status = response.status();
+    if status.is_success() {
+        let result = response.json::<T>()
+            .await
+            .map_err(|err| err_map(err.to_string()))?;
+
+        Ok(result)
+    } else {
+        let err = response.text().await
+            .map_err(|err| err_map(err.to_string()))?;
+        let status_code = status.as_str();
+        Err(err_map(format!("Invalid response {}: {}", status_code, err)))
+    }
 }
 
-#[derive(Debug)]
-pub struct CodeResponse {
-    code: String,
-    state: String,
+pub async fn get_auth_token(client: &reqwest::Client, code: CodeToken) -> Result<OAuthToken, AuthError> {
+    let request = client
+        .post(OAUTH_TOKEN_URL)
+        .form(&[
+            ("grant_type", "authorization_code"),
+            ("code", &code.code),
+            REDIRECT_URI,
+            CLIENT_ID,
+            SCOPE,
+        ])
+        .build()
+        .expect("Failed to build code exchange request");
+
+    extract_response(client, request, |err| AuthError::XBLError(err)).await
 }
 
-impl CodeResponse {
-    pub fn new(code: String, state: String) -> Self {
-        CodeResponse { code, state }
-    }
+pub async fn get_xbl_token(client: &reqwest::Client, token: OAuthToken) -> Result<XBLToken, AuthError> {
+    let token = format!("d={}", token.access_token);
+    let request = client
+        .post(XBL_TOKEN_URL)
+        .json(&json!({
+            "Properties": {
+                "AuthMethod": "RPS",
+                "SiteName": "user.auth.xboxlive.com",
+                "RpsTicket": token
+            },
+            "RelyingParty": "http://auth.xboxlive.com",
+            "TokenType": "JWT"
+        }))
+        .build()
+        .expect("Failed to build xbl token request");
 
-    pub fn from_uri(uri: &str) -> Result<Self, AuthError> {
 
-        let regex = Regex::new(PARAMS_REGEX).unwrap();
-        if regex.is_match(uri) {
-            // extract code and state
-            let extracted_params = regex
-                .captures_iter(uri);
+    extract_response(client, request, |err| AuthError::XBLError(err)).await
+}
 
-            let mut params = extracted_params
-                .map(|param| {
-                    let key = param[2].to_string();
-                    let value = param[3].to_string();
-                    (key, value)
-                })
-                .collect::<HashMap<String, String>>();
+pub async fn get_xsts_token(client: &reqwest::Client, token: XBLToken) -> Result<XSTSToken, AuthError> {
+    let token = token.extract_token();
 
-            if !params.contains_key("code") || !params.contains_key("state") {
-                Err(AuthError::OAuthError("Invalid Parameters".into()))
-            } else {
-                let code = params.remove_entry("code").unwrap().1;
-                let state = params.remove_entry("state").unwrap().1;
+    let request = client
+        .post(XSTS_TOKEN_URL)
+        .json(&json!({
+            "Properties": {
+                "SandboxId": "RETAIL",
+                "UserTokens": [token]
+            },
+            "RelyingParty": "rp://api.minecraftservices.com/",
+            "TokenType": "JWT"
+        }))
+        .build()
+        .expect("Failed to build xsts token request");
 
-                let entity = CodeResponse::new(code, state);
-                Ok(entity)
-            }
-        } else {
-            Err(AuthError::InvalidRedirectUri)
-        }
-        
-    }
+    extract_response(client, request, |err| AuthError::XSTSError(err)).await
+}
 
-    async fn exchange_code(&self, client: reqwest::Client) -> anyhow::Result<OAuthTokenResponse> {
+pub async fn get_minecraft_token(client: &reqwest::Client, token: XSTSToken) -> Result<MinecraftToken, AuthError> {
+    if let Some((uhs, token)) = token.extract_tokens() {
+        let token = format!("XBL3.0 x={};{}", uhs, token);
         let request = client
-            .post(OAUTH_TOKEN_URL)
-            .form(&[
-                ("grant_type", "authorization_code"),
-                ("code", self.code.as_str()),
-                REDIRECT_URI,
-                CLIENT_ID,
-                SCOPE,
-            ])
+            .post(MINECRAFT_TOKEN_URL)
+            .json(&json!({
+                "identityToken": token
+            }))
             .build()
-            .expect("Failed to build code exchange request");
+            .expect("Failed to build minecraft token request");
 
-        let response = client
-            .execute(request)
-            .await?
-            .json::<OAuthTokenResponse>()
-            .await?;
-
-        Ok(response)
+        extract_response(client, request, |err| AuthError::MinecraftTokenError(err)).await
+    } else {
+        Err(AuthError::MinecraftTokenError("Failed to extract tokens from xsts token".to_string()))
     }
+}
 
+pub async fn get_minecraft_profile(client: &reqwest::Client, token: MinecraftToken) -> Result<MinecraftProfile, AuthError> {
+let request = client
+        .get(MINECRAFT_PROFILE_URL)
+        .bearer_auth(&token.access_token)
+        .build()
+        .expect("Failed to build minecraft profile request");
+
+    extract_response(client, request, |err| AuthError::MinecraftTokenError(err)).await
 }
