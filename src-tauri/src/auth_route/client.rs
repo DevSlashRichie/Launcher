@@ -2,10 +2,13 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::AtomicBool;
 use std::thread;
 use std::time::{Duration};
-use tauri::{AppHandle, WindowBuilder, WindowUrl};
+use tauri::{AppHandle, Window, WindowBuilder, WindowUrl};
 use crate::auth_route::{oauth, utils};
 use std::sync::atomic::Ordering;
-use crate::auth_route::tokens::CodeToken;
+use serde::Serialize;
+use crate::auth_route::errors::AuthError;
+use crate::auth_route::tokens::{CodeToken, MinecraftProfile};
+use crate::CodeExtractor;
 
 pub const CLIENT_ID: (&str, &str) = ("client_id", "091170c6-c12e-4075-b7d0-05c916708c31");
 pub const REDIRECT_URI: (&str, &str) = ("redirect_uri", "https://login.microsoftonline.com/common/oauth2/nativeclient");
@@ -21,6 +24,19 @@ const PARAMS: &[(&str, &str)] = &[
     ("prompt", "login"),
     ("state", ""),
 ];
+
+#[derive(Serialize, Clone)]
+enum EventState {
+    INFO,
+    DONE,
+    ERROR,
+}
+
+#[derive(Serialize, Clone)]
+struct AuthStateEvent {
+    state: EventState,
+    message: String,
+}
 
 /// Returns (uri, state)
 fn build_url() -> (String, String) {
@@ -49,92 +65,59 @@ fn build_url() -> (String, String) {
     (format!("{}{}", BASE_URL, params), state)
 }
 
-async fn process_code(code: CodeToken) -> Result<(), anyhow::Error> {
+async fn process_code(code: CodeToken) -> Result<MinecraftProfile, AuthError> {
     let client = reqwest::Client::new();
-    
+
     let auth_token = oauth::get_auth_token(&client, code).await?;
     let xbl_token = oauth::get_xbl_token(&client, auth_token).await?;
     let xsts_token = oauth::get_xsts_token(&client, xbl_token).await?;
     let minecraft_token = oauth::get_minecraft_token(&client, xsts_token).await?;
     let minecraft_profile = oauth::get_minecraft_profile(&client, minecraft_token).await?;
-    println!("{:?}", minecraft_profile);
 
-    Ok(())
+    Ok(minecraft_profile)
 }
 
-pub async fn start(handle: AppHandle) {
+pub async fn start(handle: AppHandle, window: Window) {
     let (auth_url, state) = build_url();
 
-    let stop = Arc::new(AtomicBool::new(false));
-    let stop_clone = stop.clone();
+    let code_extractor = CodeExtractor::open(&handle, "Iniciar sesión", &auth_url);
 
-    let tx = Arc::new(Mutex::new(None));
-    let tx_clone = tx.clone();
+    window.emit("auth:state", AuthStateEvent {
+        message: "Please login to your account".to_string(),
+        state: EventState::INFO,
+    }).ok();
 
-    let window = WindowBuilder::new(&handle, "auth", WindowUrl::App("index.html".parse().unwrap()))
-        .title("Auth")
-        .build()
-        .unwrap();
+    let code = code_extractor.fetch().await;
 
-    // We need to redirect it because the only way we can use custom schema is by using an App URL
-    window.eval(format!("location.replace('{}')", auth_url).as_str()).ok();
+    window.emit("auth:state", AuthStateEvent {
+        message: "Fetching your details".to_string(),
+        state: EventState::INFO,
+    }).ok();
 
-    let window_clone = window.clone();
-    let event_handler = window.listen("code", move |ev| {
-        if let Some(code) = ev.payload() {
-            let code = code.to_string();
-
-            if CodeToken::uri_includes_code(code.as_str()) {
-                stop_clone.store(true, Ordering::Relaxed);
-                window_clone.close().ok();
-
-                if let Ok(mut tx) = tx_clone.try_lock() {
-                    tx.replace(code);
-                }
-            }
-        }
-    });
-
-    loop {
-        if stop.load(Ordering::Relaxed) {
-            window.unlisten(event_handler);
-            break;
-        }
-
-        let code = "\
-            if(location.href.includes('code=')) {
-              location.replace('cognatize://' + location.search)
-            }
-        ";
-
-        window.eval(code).ok();
-        thread::sleep(Duration::from_millis(1000));
-    }
-
-    let code = if let Ok(code) = tx.lock() {
-        if let Some(code) = code.as_ref() {
-            Some(code.clone())
+    let minecraft_profile = if let Some(code) = code {
+        if state == code.state {
+            process_code(code).await
         } else {
-            None
+            Err(AuthError::InvalidState)
         }
     } else {
-        None
+        Err(AuthError::MissingMinecraftProfile)
     };
 
-    if let Some(code) = code {
-        if let Ok(code) = CodeToken::from_uri(code.as_str()) {
-            
-            if state != code.state {
-                println!("State mismatch");
-                return;
-            }
-            
-            match process_code(code).await {
-                Ok(_) => (),
-                Err(e) => {
-                    println!("{:?}", e);
-                }
-            }
+    match minecraft_profile {
+        Ok(profile) => {
+            window.emit("auth:state", AuthStateEvent {
+                message: profile.name,
+                state: EventState::DONE,
+            }).ok();
         }
-    }
+
+        Err(err) => {
+            window.emit("auth:state", AuthStateEvent {
+                message: err.to_string(),
+                state: EventState::ERROR,
+            }).ok();
+        }
+    };
+
 }

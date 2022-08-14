@@ -132,6 +132,6 @@ pub struct MinecraftToken {
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct MinecraftProfile {
-    id: String,
-    name: String,
+    pub id: String,
+    pub name: String,
 }

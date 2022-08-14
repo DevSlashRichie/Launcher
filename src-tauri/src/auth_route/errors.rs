@@ -21,4 +21,6 @@ pub enum AuthError {
     #[error("State payload mismatch")]
     InvalidState,
 
+    #[error("Minecraft profile could not be retrieved")]
+    MissingMinecraftProfile
 }

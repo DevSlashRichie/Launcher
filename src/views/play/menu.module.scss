@@ -21,16 +21,29 @@
         height: 100%;
         background: rgba(0, 0, 0, 0.9);
 
-        font-size: 40px;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-        align-items: center;
-        gap: 25px;
 
-        span {
-            font-size: 20px;
+        & > div {
+            width: inherit;
+            height: inherit;
+
+            font-size: 40px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            gap: 25px;
+
+            text-align: center;
+
+            span {
+                font-size: 20px;
+            }
         }
+
+        &__done {
+            color: #80ff80;
+        }
+
     }
 
     .addAccountView {
@@ -75,7 +88,7 @@
             margin: 50px;
             font-size: 25px;
 
-            & *  {
+            & * {
                 cursor: pointer;
             }
 
@@ -103,9 +116,11 @@
 
             font-weight: bold;
             cursor: pointer;
+
             & * {
                 cursor: pointer;
             }
+
             text-align: center;
 
             font-size: 20px;

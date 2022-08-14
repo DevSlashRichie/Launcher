@@ -6,21 +6,19 @@ windows_subsystem = "windows"
 mod auth_route;
 
 use tauri::http::ResponseBuilder;
-use tauri::Manager;
 use auth_route::client;
+use crate::auth_route::code_extractor::CodeExtractor;
 
 #[tauri::command]
-async fn auth_client(handle: tauri::AppHandle) {
-    client::start(handle).await;
+async fn auth_client(handle: tauri::AppHandle, window: tauri::Window) {
+    client::start(handle, window).await;
 }
 
 fn main() {
     tauri::Builder::default()
         .invoke_handler(tauri::generate_handler![auth_client])
         .register_uri_scheme_protocol("cognatize", |handle, req| {
-            if let Some(window) = handle.get_window("auth") {
-                window.trigger("code", Some(req.uri().to_string()));
-            }
+            CodeExtractor::config(&handle, req.uri().to_string());
 
             Ok(ResponseBuilder::new()
                 .status(200)
