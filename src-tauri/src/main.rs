@@ -6,12 +6,12 @@ windows_subsystem = "windows"
 mod auth_route;
 
 use tauri::http::ResponseBuilder;
-use auth_route::client;
+use auth_route::auther;
 use crate::auth_route::code_extractor::CodeExtractor;
 
 #[tauri::command]
 async fn auth_client(handle: tauri::AppHandle, window: tauri::Window) {
-    client::start(handle, window).await;
+    auther::authenticate(handle, window).await;
 }
 
 fn main() {

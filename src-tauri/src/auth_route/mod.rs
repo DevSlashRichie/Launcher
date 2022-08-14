@@ -1,6 +1,6 @@
-pub mod client;
+pub mod auther;
 mod utils;
-mod oauth;
+mod code_processor;
 mod errors;
 mod tokens;
 pub mod code_extractor;
