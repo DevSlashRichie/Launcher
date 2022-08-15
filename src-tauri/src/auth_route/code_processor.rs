@@ -62,19 +62,19 @@ impl CodeProcessor {
         Self { client: reqwest::Client::new() }
     }
 
-    pub async fn with(code: CodeToken) -> Result<MinecraftProfile, AuthError> {
+    pub async fn with(code: CodeToken) -> Result<(MinecraftProfile, MinecraftToken), AuthError> {
         Self::new().process(code).await
     }
 
-    pub async fn process(&self, code: CodeToken) -> Result<MinecraftProfile, AuthError> {
+    pub async fn process(&self, code: CodeToken) -> Result<(MinecraftProfile, MinecraftToken), AuthError> {
 
         let auth_token = self.get_auth_token(code).await?;
         let xbl_token = self.get_xbl_token(auth_token).await?;
         let xsts_token = self.get_xsts_token(xbl_token).await?;
         let minecraft_token = self.get_minecraft_token(xsts_token).await?;
-        let minecraft_profile = self.get_minecraft_profile(minecraft_token).await?;
+        let minecraft_profile = self.get_minecraft_profile(&minecraft_token).await?;
 
-        Ok(minecraft_profile)
+        Ok((minecraft_profile, minecraft_token))
     }
 
 
@@ -150,7 +150,7 @@ impl CodeProcessor {
         }
     }
 
-    pub async fn get_minecraft_profile(&self, token: MinecraftToken) -> Result<MinecraftProfile, AuthError> {
+    pub async fn get_minecraft_profile(&self, token: &MinecraftToken) -> Result<MinecraftProfile, AuthError> {
         let request = self.client
             .get(MINECRAFT_PROFILE_URL)
             .bearer_auth(&token.access_token)

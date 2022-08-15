@@ -1,7 +1,7 @@
 import {useState} from "react";
 
 
-export function useArray<T>(initialValue: T[] = []) {
+export function useArray<T>(initialValue: T[] | (() => T[]) = []) {
 
     const [ arr, setArr ] = useState<Array<T>>(initialValue);
 

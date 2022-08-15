@@ -1,23 +1,34 @@
 
-import {faArrowLeftLong, faCirclePlus} from "@fortawesome/free-solid-svg-icons";
-import {useState} from "react";
+import {useEffect, useState} from "react";
+
+import { faCirclePlus} from "@fortawesome/free-solid-svg-icons";
+import create from 'zustand/vanilla';
 
 import {Account} from "./account";
 import styles from '../menu.module.scss';
-import {Button} from "../../../components/button/button";
 
 // tauri
 import {invoke} from '@tauri-apps/api/tauri';
 import { listen } from '@tauri-apps/api/event';
-import { appWindow } from '@tauri-apps/api/window';
 
 import {LoadingScreen} from "../loadingScreen";
 import {FontAwesomeIcon} from "@fortawesome/react-fontawesome";
 import {useArray} from "../../../hooks/useArray";
 
 interface IAccount {
-    name: string;
+    username: string;
 }
+
+const accountsStore = create<Array<IAccount>>(() => []);
+
+function fetchAccounts() {
+    invoke('get_accounts').then((accounts) => {
+        accountsStore.setState(accounts as Array<IAccount>, true);
+        console.log(accounts);
+    });
+}
+
+fetchAccounts();
 
 type LoadState = {
     loading: boolean,
@@ -33,7 +44,9 @@ export function AccountPicker() {
 
 
     const [ loading, setLoading ] = useState<LoadState | null>(null);
-    const {arr: accounts, addItem: addAccount, removeItem: removeAccount} = useArray<IAccount>();
+    const {arr: accounts, addItem: addAccount, removeItem: removeAccount, setItems: setAccounts} = useArray<IAccount>(accountsStore.getState);
+
+    useEffect(() => accountsStore.subscribe(setAccounts), []);
 
     const handleClickAccountProvider = () => {
         setLoading({ loading: true });
@@ -47,7 +60,7 @@ export function AccountPicker() {
                 setLoading({ loading: false, message: `Logged in as ${message}` });
                 setTimeout(() => {
                     addAccount({
-                        name: message
+                        username: message,
                     });
                     setLoading(null);
                 }, 1500);
@@ -75,7 +88,7 @@ export function AccountPicker() {
                     accounts.map((it, index) =>
                         <Account
                             key={index}
-                            name={it.name}
+                            name={it.username}
                             onRemove={() => removeAccount(index)}
                         />
                     )

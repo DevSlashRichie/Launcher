@@ -23,6 +23,7 @@ rand = "0.8.5"
 anyhow = "1.0.61"
 regex = "1.6.0"
 thiserror = "1.0.32"
+home = "0.5.3"
 
 [features]
 # by default Tauri runs in production mode

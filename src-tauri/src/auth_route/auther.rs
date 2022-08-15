@@ -1,9 +1,11 @@
-use tauri::{AppHandle, Window};
+use std::borrow::BorrowMut;
+use std::ops::DerefMut;
+use tauri::{AppHandle, Manager, Window};
 use crate::auth_route::{code_processor};
 use serde::Serialize;
 use crate::auth_route::code_processor::CodeProcessor;
 use crate::auth_route::errors::AuthError;
-use crate::CodeExtractor;
+use crate::{Account, CodeExtractor, Storage};
 
 #[derive(Serialize, Clone)]
 enum EventState {
@@ -46,11 +48,22 @@ pub async fn authenticate(handle: AppHandle, window: Window) {
     };
 
     match minecraft_profile {
-        Ok(profile) => {
+        Ok((profile, token)) => {
             window.emit("auth:state", AuthStateEvent {
-                message: profile.name,
+                message: profile.name.clone(),
                 state: EventState::DONE,
             }).ok();
+
+            let storage = handle.state::<Storage>().inner().extract();
+            let mut storage = storage.write().unwrap();
+
+            storage.settings.accounts.contents.push(Account {
+                username: profile.name,
+                uuid: profile.id,
+                access_token: token.access_token
+            });
+
+            storage.settings.accounts.save();
         }
 
         Err(err) => {
