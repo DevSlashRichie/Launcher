@@ -1,5 +1,5 @@
 import styles from './optionsbox.module.scss';
-import {forwardRef, ReactNode} from "react";
+import { forwardRef, ReactNode } from 'react';
 import cn from 'classnames';
 
 interface OptionsBoxProps {
@@ -8,7 +8,7 @@ interface OptionsBoxProps {
     show?: boolean
 }
 
-export const OptionsBox = forwardRef<HTMLDivElement, OptionsBoxProps>(({children, className, show}, ref) => {
+export const OptionsBox = forwardRef<HTMLDivElement, OptionsBoxProps>(({ children, className, show }, ref) => {
     return (
         <div>
             {

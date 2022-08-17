@@ -3,12 +3,12 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use crate::files::errors::{FileError};
 use std::fs;
-use crate::Account;
+use crate::files::accounts::AccountStorage;
 
 const SETTINGS_FOLDER: &str = "settings";
 
 pub struct Settings {
-    pub accounts: ConfigurationFile<Vec<Account>>
+    pub accounts: ConfigurationFile<AccountStorage>
 }
 
 pub struct ConfigurationFile<T: Serialize + DeserializeOwned> {

@@ -1,5 +1,3 @@
-use std::borrow::BorrowMut;
-use std::ops::DerefMut;
 use tauri::{AppHandle, Manager, Window};
 use crate::auth_route::{code_processor};
 use serde::Serialize;
@@ -57,13 +55,24 @@ pub async fn authenticate(handle: AppHandle, window: Window) {
             let storage = handle.state::<Storage>().inner().extract();
             let mut storage = storage.write().unwrap();
 
-            storage.settings.accounts.contents.push(Account {
+            let store = &mut storage.settings.accounts.contents;
+
+            // If an account with the same id already exists we remove it.
+            //   In the big screen we are replacing it for a more updated token.
+            if let Some(account_position) = store.accounts.iter().position(|it| it.uuid == profile.id) {
+                store.accounts.remove(account_position);
+            }
+
+            let id = profile.id.clone();
+            store.accounts.push(Account {
                 username: profile.name,
                 uuid: profile.id,
                 access_token: token.access_token
             });
 
-            storage.settings.accounts.save();
+            store.elected_account = Some(id);
+
+            storage.settings.accounts.save().ok();
         }
 
         Err(err) => {

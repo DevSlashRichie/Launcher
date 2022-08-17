@@ -1,4 +1,4 @@
-import React, {Dispatch, SetStateAction, useEffect, useState} from "react";
+import React, { useEffect, useState } from 'react';
 
 export function useOutsideClick(
     el: React.RefObject<HTMLDivElement>,
@@ -7,7 +7,7 @@ export function useOutsideClick(
     onOutsideClick?: () => void,
 ): boolean {
 
-    const [isActive, setIsActive] = useState(initialState);
+    const [ isActive, setIsActive ] = useState(initialState);
 
     useEffect(() => {
         const onClick = (ev: MouseEvent) => {
@@ -31,7 +31,7 @@ export function useOutsideClick(
                     }
                 }
             }
-        }
+        };
 
         window.addEventListener('click', onClick);
 
@@ -39,7 +39,7 @@ export function useOutsideClick(
             window.removeEventListener('click', onClick);
         };
 
-    }, [isActive, el, btnRef]);
+    }, [ isActive, el, btnRef ]);
 
     return isActive;
 }

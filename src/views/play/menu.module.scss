@@ -44,6 +44,10 @@
             color: #80ff80;
         }
 
+        &__error {
+            color: #ff8080;
+        }
+
     }
 
     .addAccountView {
@@ -141,6 +145,10 @@
             cursor: pointer;
 
             font-weight: bold;
+
+            span {
+                cursor: pointer;
+            }
 
             &:last-child {
                 border-bottom: none;

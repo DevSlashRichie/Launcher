@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::Duration;
-use tauri::{AppHandle, Manager, Window, WindowBuilder, WindowUrl};
+use tauri::{AppHandle, Manager, Window, WindowBuilder, WindowEvent, WindowUrl};
 use crate::auth_route::tokens::CodeToken;
 
 const CODE_REPLACER: &str = "\
@@ -44,6 +44,13 @@ impl CodeExtractor {
         let stop_state = self.stop_state.clone();
         let window = self.window.clone();
 
+        let stop_state_clone = stop_state.clone();
+        self.window.on_window_event(move |ev| {
+            if let WindowEvent::CloseRequested { .. } = ev {
+                stop_state_clone.store(true, Ordering::Relaxed);
+            }
+        });
+
         let event_handler = self.window.listen("code", move |ev| {
             if let Some(code) = ev.payload() {
                 if CodeToken::uri_includes_code(code) {
@@ -55,6 +62,7 @@ impl CodeExtractor {
                 }
             }
         });
+
 
         // Since tauri doesn't allow redirections without https scheme
         // we need to manually replace the location of the window
