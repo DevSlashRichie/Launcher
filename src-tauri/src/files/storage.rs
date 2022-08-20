@@ -1,6 +1,7 @@
 use std::fs;
 use std::sync::{Arc, RwLock};
 use home::home_dir;
+use crate::asset_manager::asset_worker::AssetManager;
 use crate::files::errors::FileError;
 use crate::Settings;
 
@@ -10,6 +11,7 @@ pub struct Storage {
 
 pub struct InnerStorage {
     pub settings: Settings,
+    pub assets: AssetManager,
 }
 
 impl Storage {
@@ -26,10 +28,12 @@ impl Storage {
         }
 
         let settings = Settings::new(&folder)?;
+        let asset_manager = AssetManager::new(&folder);
 
         Ok(Storage {
             inner: Arc::new(RwLock::new(InnerStorage {
                 settings,
+                assets: asset_manager
             })),
         })
     }

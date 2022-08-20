@@ -5,6 +5,7 @@ windows_subsystem = "windows"
 
 mod auth_route;
 mod files;
+mod asset_manager;
 
 use tauri::http::ResponseBuilder;
 use tauri::Manager;
@@ -81,6 +82,13 @@ fn main() {
         })
         .setup(|app| {
             let storage = Storage::create(STORAGE_FOLDER)?;
+
+            let st = storage.extract();
+            tauri::async_runtime::block_on(async move {
+                let res = st.read().unwrap().assets.get_version("1.19.2").await;
+
+                println!("{:?}", res);
+            });
 
             app.manage(storage);
 
