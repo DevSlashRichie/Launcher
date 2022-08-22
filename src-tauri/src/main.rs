@@ -10,6 +10,7 @@ mod asset_manager;
 use tauri::http::ResponseBuilder;
 use tauri::Manager;
 use auth_route::auther;
+use crate::asset_manager::version::VersionId;
 use crate::auth_route::code_extractor::CodeExtractor;
 use crate::files::accounts::{Account, AccountStorage};
 use crate::files::settings::Settings;
@@ -85,7 +86,7 @@ fn main() {
 
             let st = storage.extract();
             tauri::async_runtime::block_on(async move {
-                let res = st.read().unwrap().assets.get_version("1.19.2").await;
+                let res = st.read().unwrap().assets.check_version(VersionId::V1_19_2).await;
 
                 println!("{:?}", res);
             });

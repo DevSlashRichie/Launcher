@@ -25,6 +25,8 @@ regex = "1.6.0"
 thiserror = "1.0.32"
 home = "0.5.3"
 tokio = "1.20.1"
+sha1 = "0.10.1"
+url = "2.2.2"
 
 [features]
 # by default Tauri runs in production mode

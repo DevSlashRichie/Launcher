@@ -1,3 +1,4 @@
+use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 // ROOT
@@ -26,15 +27,31 @@ pub struct Artifact {
     pub url: String,
 }
 
+impl Artifact {
+    pub fn file_name<'a>(&'a self) -> &'a str {
+        self.url.split("/").last().unwrap()
+    }
+
+    pub fn path(&self, at: &PathBuf) -> PathBuf {
+        let file_name = self.file_name();
+
+        if let Some(path) = &self.path {
+            at.join(path).join(file_name)
+        } else {
+            at.join(file_name)
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Os {
-    name: String
+    pub name: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
 pub struct Rule {
-    os: Os,
-    action: String
+    pub os: Os,
+    pub action: String,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -67,5 +84,5 @@ pub struct VersionLatest {
 #[derive(Serialize, Deserialize)]
 pub struct VersionsManifest {
     pub latest: VersionLatest,
-    pub versions: Vec<Version>
+    pub versions: Vec<Version>,
 }
