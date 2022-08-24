@@ -1,5 +1,6 @@
 
 use serde::{Serialize, Deserialize};
+use crate::auth_route::tokens::{MinecraftProfile, MinecraftToken, OAuthToken};
 
 #[derive(Serialize, Deserialize, Clone, Default)]
 pub struct AccountStorage {
@@ -9,7 +10,7 @@ pub struct AccountStorage {
 
 #[derive(Serialize, Deserialize, Clone)]
 pub struct Account {
-    pub username: String,
-    pub uuid: String,
-    pub access_token: String,
+    pub profile: MinecraftProfile,
+    pub mc: MinecraftToken,
+    pub auth: OAuthToken,
 }

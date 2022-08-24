@@ -4,6 +4,7 @@ use serde::Serialize;
 use crate::auth_route::code_processor::CodeProcessor;
 use crate::auth_route::errors::AuthError;
 use crate::{Account, CodeExtractor, Storage};
+use crate::auth_route::tokens::MinecraftProfile;
 
 #[derive(Serialize, Clone)]
 enum EventState {
@@ -46,7 +47,7 @@ pub async fn authenticate(handle: AppHandle, window: Window) {
     };
 
     match minecraft_profile {
-        Ok((profile, token)) => {
+        Ok((profile, token, oauth_token)) => {
             window.emit("auth:state", AuthStateEvent {
                 message: profile.name.clone(),
                 state: EventState::DONE,
@@ -59,15 +60,15 @@ pub async fn authenticate(handle: AppHandle, window: Window) {
 
             // If an account with the same id already exists we remove it.
             //   In the big screen we are replacing it for a more updated token.
-            if let Some(account_position) = store.accounts.iter().position(|it| it.uuid == profile.id) {
+            if let Some(account_position) = store.accounts.iter().position(|it| it.profile.id == profile.id) {
                 store.accounts.remove(account_position);
             }
 
             let id = profile.id.clone();
             store.accounts.push(Account {
-                username: profile.name,
-                uuid: profile.id,
-                access_token: token.access_token
+                auth: oauth_token,
+                profile,
+                mc: token,
             });
 
             store.elected_account = Some(id);

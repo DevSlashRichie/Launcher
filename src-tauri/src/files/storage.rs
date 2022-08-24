@@ -1,7 +1,7 @@
 use std::fs;
 use std::sync::{Arc, RwLock};
 use home::home_dir;
-use crate::asset_manager::asset_worker::AssetManager;
+use crate::version_manager::manager::AssetManager;
 use crate::files::errors::FileError;
 use crate::Settings;
 

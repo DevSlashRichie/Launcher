@@ -7,7 +7,7 @@ use crate::auth_route::utils;
 
 const CLIENT_ID: (&str, &str) = ("client_id", "091170c6-c12e-4075-b7d0-05c916708c31");
 const REDIRECT_URI: (&str, &str) = ("redirect_uri", "https://login.microsoftonline.com/common/oauth2/nativeclient");
-const SCOPE: (&str, &str) = ("scope", "XboxLive.signin");
+const SCOPE: (&str, &str) = ("scope", "XboxLive.signin offline_access");
 
 const BASE_URL: &str = "https://login.microsoftonline.com/consumers/oauth2/v2.0/authorize";
 const PARAMS: &[(&str, &str)] = &[
@@ -62,21 +62,44 @@ impl CodeProcessor {
         Self { client: reqwest::Client::new() }
     }
 
-    pub async fn with(code: CodeToken) -> Result<(MinecraftProfile, MinecraftToken), AuthError> {
+    pub async fn with(code: CodeToken) -> Result<(MinecraftProfile, MinecraftToken, OAuthToken), AuthError> {
         Self::new().process(code).await
     }
 
-    pub async fn process(&self, code: CodeToken) -> Result<(MinecraftProfile, MinecraftToken), AuthError> {
+    pub async fn process(&self, code: CodeToken) -> Result<(MinecraftProfile, MinecraftToken, OAuthToken), AuthError> {
 
         let auth_token = self.get_auth_token(code).await?;
-        let xbl_token = self.get_xbl_token(auth_token).await?;
+        let xbl_token = self.get_xbl_token(auth_token.clone()).await?;
         let xsts_token = self.get_xsts_token(xbl_token).await?;
         let minecraft_token = self.get_minecraft_token(xsts_token).await?;
         let minecraft_profile = self.get_minecraft_profile(&minecraft_token).await?;
 
-        Ok((minecraft_profile, minecraft_token))
+        Ok((minecraft_profile, minecraft_token, auth_token))
     }
 
+    pub async fn refresh_oauth(&self, auth_token: OAuthToken) -> Result<OAuthToken, AuthError> {
+        let request = self.client
+            .post(OAUTH_TOKEN_URL)
+            .form(&[
+                CLIENT_ID,
+                SCOPE,
+                ("refresh_token", &auth_token.refresh_token),
+                ("grant_type", "refresh_token"),
+            ])
+            .build()
+            .expect("Failed to build code exchange request");
+
+        self.extract_response(request, |err| AuthError::XBLError(err)).await
+    }
+
+    pub async fn auth_minecraft_token(&self, auth_token: OAuthToken) -> Result<(MinecraftToken, MinecraftProfile), AuthError>{
+        let xbl_token = self.get_xbl_token(auth_token.clone()).await?;
+        let xsts_token = self.get_xsts_token(xbl_token).await?;
+        let minecraft_token = self.get_minecraft_token(xsts_token).await?;
+        let minecraft_profile = self.get_minecraft_profile(&minecraft_token).await?;
+
+        Ok((minecraft_token, minecraft_profile))
+    }
 
     async fn get_auth_token(&self, code: CodeToken) -> Result<OAuthToken, AuthError> {
         let request = self.client

@@ -5,12 +5,12 @@ windows_subsystem = "windows"
 
 mod auth_route;
 mod files;
-mod asset_manager;
+mod version_manager;
 
 use tauri::http::ResponseBuilder;
 use tauri::Manager;
 use auth_route::auther;
-use crate::asset_manager::version::VersionId;
+use crate::version_manager::version::VersionId;
 use crate::auth_route::code_extractor::CodeExtractor;
 use crate::files::accounts::{Account, AccountStorage};
 use crate::files::settings::Settings;
@@ -32,7 +32,7 @@ fn remove_account(handle: tauri::AppHandle, account: u32) {
 
     let remove_elected = if let Some(account) = store.accounts.get(account as usize) {
         if let Some(elected) = &store.elected_account {
-            elected == &account.uuid
+            elected == &account.profile.id
         } else {
             false
         }
@@ -45,7 +45,6 @@ fn remove_account(handle: tauri::AppHandle, account: u32) {
     if remove_elected {
         store.elected_account = None;
     }
-
 }
 
 #[tauri::command]
@@ -57,21 +56,55 @@ fn get_accounts(handle: tauri::AppHandle) -> AccountStorage {
 }
 
 #[tauri::command]
-fn elect_account(handle: tauri::AppHandle, account: u32) {
+async fn elect_account(handle: tauri::AppHandle, account: u32) {
     let storage = handle.state::<Storage>().inner().extract();
     let mut storage = storage.write().unwrap();
     let accounts = &mut storage.settings.accounts.contents;
     let account = accounts.accounts.get(account as usize);
 
     if let Some(account) = account {
-        accounts.elected_account = Some(account.uuid.clone());
+        accounts.elected_account = Some(account.profile.id.clone());
         storage.settings.accounts.save();
+    }
+}
+
+#[tauri::command]
+async fn start_game(handle: tauri::AppHandle) {
+    let source = handle.state::<Storage>().inner();
+
+    // REMOVE THE DOUBLE PARKING REQUEST, IT WAS ONLY FOR TESTING
+    let account = {
+        let storage = source.extract();
+        let storage = storage.read().unwrap();
+        let accounts = &storage.settings.accounts.contents;
+
+        if let Some(account) = &accounts.elected_account {
+            if let Some(account) = accounts.accounts.iter().find(|x| &x.profile.id == account) {
+                Some(account.clone())
+            } else {
+                None
+            }
+        } else {
+            None
+        }
+    };
+
+    if let Some(account) = account {
+        let storage = source.extract();
+        let park = storage.read().unwrap();
+        let assets = park.assets.clone();
+
+        let res = assets.load_version(VersionId::V1_19_2, account.clone()).await;
+
+        if let Err(err) = res {
+            println!("{:?}", err);
+        }
     }
 }
 
 fn main() {
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![add_account, get_accounts, remove_account, elect_account])
+        .invoke_handler(tauri::generate_handler![add_account, get_accounts, remove_account, elect_account, start_game])
         .register_uri_scheme_protocol("cognatize", |handle, req| {
             CodeExtractor::config(handle, req.uri().to_string());
 
@@ -83,13 +116,6 @@ fn main() {
         })
         .setup(|app| {
             let storage = Storage::create(STORAGE_FOLDER)?;
-
-            let st = storage.extract();
-            tauri::async_runtime::block_on(async move {
-                let res = st.read().unwrap().assets.check_version(VersionId::V1_19_2).await;
-
-                println!("{:?}", res);
-            });
 
             app.manage(storage);
 

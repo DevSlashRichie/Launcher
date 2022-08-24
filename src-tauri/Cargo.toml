@@ -24,9 +24,10 @@ anyhow = "1.0.61"
 regex = "1.6.0"
 thiserror = "1.0.32"
 home = "0.5.3"
-tokio = "1.20.1"
+tokio = { version = "1.20.1", features = ["macros"] }
 sha1 = "0.10.1"
 url = "2.2.2"
+os_info = "3.5.0"
 
 [features]
 # by default Tauri runs in production mode

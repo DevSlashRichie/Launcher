@@ -58,9 +58,10 @@ impl CodeToken {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct OAuthToken {
     pub access_token: String,
+    pub refresh_token: String,
     pub expires_in: u64,
     scope: String,
 }
@@ -122,15 +123,15 @@ impl XSTSToken {
     }
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MinecraftToken {
     username: String,
     pub access_token: String,
     token_type: String,
-    expires_in: u64,
+    pub expires_in: u64,
 }
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MinecraftProfile {
     pub id: String,
     pub name: String,

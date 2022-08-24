@@ -1,4 +1,4 @@
 mod asset;
-pub mod asset_worker;
+pub mod manager;
 mod errors;
 pub mod version;

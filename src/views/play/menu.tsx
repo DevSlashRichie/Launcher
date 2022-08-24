@@ -6,6 +6,7 @@ import { OptionsBox } from '../../components/optionsbox/OptionsBox';
 import { useRef } from 'react';
 import { useOutsideClick } from '../../hooks/useOutsideClick';
 import { AccountPicker } from './accounts/accountPicker';
+import {invoke} from "@tauri-apps/api";
 
 
 export function Menu() {
@@ -31,7 +32,9 @@ export function Menu() {
             <div className={styles.playCenter}>
 
 
-                <Button className={styles.play}>
+                <Button className={styles.play} onClick={() => {
+                    invoke('start_game').catch(console.error);
+                }}>
                     PLAY
                 </Button>
 
