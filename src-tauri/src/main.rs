@@ -7,6 +7,7 @@ mod auth_route;
 mod files;
 mod version_manager;
 
+use std::pin::Pin;
 use tauri::http::ResponseBuilder;
 use tauri::Manager;
 use auth_route::auther;
@@ -72,15 +73,17 @@ async fn elect_account(handle: tauri::AppHandle, account: u32) {
 async fn start_game(handle: tauri::AppHandle) {
     let source = handle.state::<Storage>().inner();
 
-    // REMOVE THE DOUBLE PARKING REQUEST, IT WAS ONLY FOR TESTING
-    let account = {
+    let data = {
         let storage = source.extract();
         let storage = storage.read().unwrap();
+
+        let assets = storage.assets.clone();
+
         let accounts = &storage.settings.accounts.contents;
 
         if let Some(account) = &accounts.elected_account {
             if let Some(account) = accounts.accounts.iter().find(|x| &x.profile.id == account) {
-                Some(account.clone())
+                Some((account.clone(), assets))
             } else {
                 None
             }
@@ -89,11 +92,8 @@ async fn start_game(handle: tauri::AppHandle) {
         }
     };
 
-    if let Some(account) = account {
-        let storage = source.extract();
-        let park = storage.read().unwrap();
-        let assets = park.assets.clone();
 
+    if let Some((account, assets)) = data {
         let res = assets.load_version(VersionId::V1_19_2, account.clone()).await;
 
         if let Err(err) = res {
