@@ -436,6 +436,7 @@ impl AssetManager {
             }
         }.instrument(tracing::info_span!("MINECRAFT")));
 
+
         let _ = tokio::join!(handle);
 
         Ok(())
