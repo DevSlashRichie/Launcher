@@ -4,7 +4,7 @@ use serde::Serialize;
 use crate::auth_route::code_processor::CodeProcessor;
 use crate::auth_route::errors::AuthError;
 use crate::{Account, CodeExtractor, Storage};
-use crate::auth_route::tokens::MinecraftProfile;
+use crate::auth_route::tokens::{MinecraftProfile, MinecraftToken, OAuthToken};
 
 #[derive(Serialize, Clone)]
 enum EventState {
@@ -65,10 +65,22 @@ pub async fn authenticate(handle: AppHandle, window: Window) {
             }
 
             let id = profile.id.clone();
+
+
+            let start = std::time::SystemTime::now();
+            let now = start.duration_since(std::time::UNIX_EPOCH)
+                .expect("Time went backwards")
+                .as_secs();
+
+            let mc_exp_time = now + token.expires_in;
+            let auth_exp_time = now + oauth_token.expires_in;
+
             store.accounts.push(Account {
                 auth: oauth_token,
                 profile,
                 mc: token,
+                mc_exp_time,
+                auth_exp_time,
             });
 
             store.elected_account = Some(id);
@@ -83,5 +95,40 @@ pub async fn authenticate(handle: AppHandle, window: Window) {
             }).ok();
         }
     };
+}
 
+pub async fn refresh_oauth(auth_token: &OAuthToken) -> Result<OAuthToken, AuthError> {
+    CodeProcessor::new()
+        .refresh_oauth(auth_token)
+        .await
+}
+
+pub async fn auth_minecraft_token(auth_token: &OAuthToken) -> Result<(MinecraftToken, MinecraftProfile), AuthError> {
+    CodeProcessor::new()
+        .auth_minecraft_token(auth_token)
+        .await
+}
+
+pub async fn validate_token(auth: &mut Account) -> Result<bool, AuthError> {
+    let start = std::time::SystemTime::now();
+    let now = start.duration_since(std::time::UNIX_EPOCH)
+        .expect("Time went backwards")
+        .as_secs();
+
+    let mut update = false;
+
+    if now >= auth.auth_exp_time {
+        let new_token = refresh_oauth(&auth.auth).await?;
+        auth.auth = new_token;
+        update = true;
+    }
+
+    if now >= auth.mc_exp_time {
+        let (minecraft_token, minecraft_profile) = auth_minecraft_token(&auth.auth).await?;
+        auth.mc = minecraft_token;
+        auth.profile = minecraft_profile;
+        update = true;
+    }
+
+    Ok(update)
 }

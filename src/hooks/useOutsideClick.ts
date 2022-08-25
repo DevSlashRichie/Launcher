@@ -1,15 +1,28 @@
-import React, { useEffect, useState } from 'react';
+import {Dispatch, SetStateAction, useEffect, useRef, useState} from 'react';
 
 export function useOutsideClick(
-    el: React.RefObject<HTMLDivElement>,
-    btnRef: React.RefObject<HTMLElement>,
     initialState: boolean,
     onOutsideClick?: () => void,
-): boolean {
+) {
 
     const [ isActive, setIsActive ] = useState(initialState);
 
+    const el = useRef<HTMLDivElement>(null);
+    const btnRef = useRef<HTMLDivElement>(null);
+
+    const [stateBlocker, setStateBlocker] = useState(false);
+    const handleActive = (state: SetStateAction<boolean>) => {
+        setStateBlocker(true);
+        setIsActive(state);
+        setTimeout(() => {
+            setStateBlocker(false);
+        }, 10);
+    };
+
     useEffect(() => {
+        if (stateBlocker)
+            return;
+        
         const onClick = (ev: MouseEvent) => {
             if (btnRef.current) {
                 if (btnRef.current.contains(ev.target as Node) || btnRef.current.isEqualNode(ev.target as Node)) {
@@ -39,7 +52,7 @@ export function useOutsideClick(
             window.removeEventListener('click', onClick);
         };
 
-    }, [ isActive, el, btnRef ]);
+    }, [ isActive, el, btnRef, stateBlocker ]);
 
-    return isActive;
+    return { isActive, el, btnRef, setIsActive: handleActive };
 }

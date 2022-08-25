@@ -1,9 +1,10 @@
 use std::fmt::Formatter;
+use std::iter::Map;
 use std::path::PathBuf;
 use regex::Regex;
 use serde::{de, Deserialize, Deserializer, Serialize};
 use serde::de::{Error, MapAccess};
-use serde_json::Value;
+use serde_json::{Value};
 
 // ROOT
 #[derive(Serialize, Deserialize, Debug)]
@@ -98,7 +99,7 @@ pub struct Downloads {
 
 // ASSETS
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Artifact {
     pub id: Option<String>,
     pub path: Option<String>,
@@ -108,6 +109,15 @@ pub struct Artifact {
 }
 
 impl Artifact {
+
+    pub fn id(&self) -> String {
+        if let Some(id) = self.id.as_ref() {
+            id.clone()
+        } else {
+            self.file_name().to_string()
+        }
+    }
+
     pub fn file_name(&self) -> &str {
         self.url.split("/").last().unwrap()
     }

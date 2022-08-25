@@ -175,38 +175,58 @@
 
         &__left {
             display: flex;
-            align-items: center;
-            gap: 10px;
-        }
+            flex-direction: row;
 
-        .sideBtn {
-            font-size: 20px;
-            color: #000;
-            min-width: 37px;
-            height: 37px;
+            .play {
+                cursor: pointer;
 
-            display: flex;
-            justify-content: center;
-            align-items: center;
+                font-size: 30px;
+                width: 260px;
+                height: 67px;
+                font-weight: 900;
+            }
 
-            font-weight: bold;
-            padding: 20px;
+            .game {
+                font-size: 20px;
+                width: 100px;
+                height: 67px;
+                font-weight: 900;
+                margin-left: 15px;
 
-            span {
-                font-size: 15px;
-                margin-top: 5px;
-                margin-left: 5px;
+                justify-content: space-evenly;
+
+                display: flex;
+                align-items: center;
+                text-align: center;
             }
         }
 
-        .play {
-            cursor: pointer;
+        &__right {
+            display: flex;
+            align-items: center;
+            gap: 10px;
 
-            font-size: 30px;
-            width: 260px;
-            height: 67px;
-            font-weight: 900;
+            .sideBtn {
+                font-size: 20px;
+                color: #000;
+                min-width: 37px;
+                height: 37px;
+
+                display: flex;
+                justify-content: center;
+                align-items: center;
+
+                font-weight: bold;
+                padding: 20px;
+
+                span {
+                    font-size: 15px;
+                    margin-top: 5px;
+                    margin-left: 5px;
+                }
+            }
         }
+
     }
 
 

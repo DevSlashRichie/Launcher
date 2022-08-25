@@ -28,7 +28,10 @@ impl Storage {
         }
 
         let settings = Settings::new(&folder)?;
+
         let asset_manager = AssetManager::new(&folder);
+        asset_manager.ensure_exists()
+            .expect("Could not create asset manager");
 
         Ok(Storage {
             inner: Arc::new(RwLock::new(InnerStorage {

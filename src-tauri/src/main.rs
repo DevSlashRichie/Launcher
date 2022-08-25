@@ -7,13 +7,14 @@ mod auth_route;
 mod files;
 mod version_manager;
 
-use std::pin::Pin;
 use tauri::http::ResponseBuilder;
 use tauri::Manager;
+use tracing::{info, error};
 use auth_route::auther;
 use crate::version_manager::version::VersionId;
 use crate::auth_route::code_extractor::CodeExtractor;
-use crate::files::accounts::{Account, AccountStorage};
+use crate::auth_route::accounts::{AccountStorage, Account};
+use crate::version_manager::games::{AVAILABLE_GAMES, Game};
 use crate::files::settings::Settings;
 use crate::files::storage::Storage;
 
@@ -70,6 +71,29 @@ async fn elect_account(handle: tauri::AppHandle, account: u32) {
 }
 
 #[tauri::command]
+fn get_games(handle: tauri::AppHandle) -> (Vec<Game>, Option<String>) {
+    let storage = handle.state::<Storage>().inner().extract();
+    let storage = storage.read().unwrap();
+
+    let games = AVAILABLE_GAMES.iter()
+        .map(|entry| Game::from_static(entry))
+        .collect();
+    (games, storage.settings.games.contents.elected_game.clone())
+}
+
+#[tauri::command]
+fn pick_game(handle: tauri::AppHandle, id: String) {
+    let storage = handle.state::<Storage>().inner().extract();
+    let mut storage = storage.write().unwrap();
+    let game = AVAILABLE_GAMES.iter().find(|game| game.0 == id);
+
+    if let Some(game) = game {
+        storage.settings.games.contents.elected_game = Some(game.0.to_string());
+        storage.settings.games.save();
+    }
+}
+
+#[tauri::command]
 async fn start_game(handle: tauri::AppHandle) {
     let source = handle.state::<Storage>().inner();
 
@@ -80,10 +104,17 @@ async fn start_game(handle: tauri::AppHandle) {
         let assets = storage.assets.clone();
 
         let accounts = &storage.settings.accounts.contents;
+        let games = &storage.settings.games.contents;
 
+        // Awful "hack" to get the elected account
         if let Some(account) = &accounts.elected_account {
             if let Some(account) = accounts.accounts.iter().find(|x| &x.profile.id == account) {
-                Some((account.clone(), assets))
+                if let Some(game) = &games.elected_game {
+                    if let Some(game) = AVAILABLE_GAMES.iter().find(|it| it.0 == game.as_str()) {
+                        let game = Game::from_static(game);
+                        Some((account.clone(), assets, game))
+                    } else { None }
+                } else { None }
             } else {
                 None
             }
@@ -92,19 +123,40 @@ async fn start_game(handle: tauri::AppHandle) {
         }
     };
 
+    if let Some((mut account, assets, game)) = data {
+        let should_save = auther::validate_token(&mut account).await;
 
-    if let Some((account, assets)) = data {
-        let res = assets.load_version(VersionId::V1_19_2, account.clone()).await;
+        {
+            match should_save {
+                Err(err) => error!("Error while validating token: {}", err),
+                Ok(should_save) => {
+                    if should_save {
+                        info!("Token has been updated");
+                        let storage = source.extract();
+                        let mut storage = storage.write().unwrap();
+                        let pos = storage.settings.accounts.contents.accounts.iter_mut()
+                            .position(|x| x.profile.id == account.profile.id)
+                            .unwrap();
+                        storage.settings.accounts.contents.accounts[pos] = account.clone();
+                        storage.settings.accounts.save();
+                    }
+                }
+            }
+        }
+
+        let res = assets.load_version(game, account).await;
 
         if let Err(err) = res {
-            println!("{:?}", err);
+            error!("{:?}", err);
         }
     }
 }
 
 fn main() {
+    tracing_subscriber::fmt::init();
+
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![add_account, get_accounts, remove_account, elect_account, start_game])
+        .invoke_handler(tauri::generate_handler![add_account, get_accounts, remove_account, elect_account, start_game, get_games, pick_game])
         .register_uri_scheme_protocol("cognatize", |handle, req| {
             CodeExtractor::config(handle, req.uri().to_string());
 
@@ -115,8 +167,10 @@ fn main() {
             )
         })
         .setup(|app| {
+            info!("Initializing Launcher");
             let storage = Storage::create(STORAGE_FOLDER)?;
 
+            info!("Storage initialized");
             app.manage(storage);
 
             Ok(())

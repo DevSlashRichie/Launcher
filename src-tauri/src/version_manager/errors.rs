@@ -1,8 +1,9 @@
 use std::io;
 use thiserror::Error;
+use crate::auth_route::errors::AuthError;
 
 #[derive(Error, Debug)]
-pub enum AssetError {
+pub enum ManagerError {
     #[error("Could not download file: {0}")]
     DownloadError(#[from] reqwest::Error),
     #[error("Could not parse file: {0}")]
@@ -11,4 +12,6 @@ pub enum AssetError {
     IoError(#[from] io::Error),
     #[error("Asset not found")]
     NotFound,
+    #[error("Authentication error: {0}")]
+    AuthenticationError(#[from] AuthError),
 }

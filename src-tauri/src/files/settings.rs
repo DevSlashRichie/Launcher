@@ -3,12 +3,15 @@ use serde::de::DeserializeOwned;
 use serde::Serialize;
 use crate::files::errors::{FileError};
 use std::fs;
-use crate::files::accounts::AccountStorage;
+use tracing::info;
+use crate::auth_route::accounts::AccountStorage;
+use crate::version_manager::games::{GameStorage};
 
 const SETTINGS_FOLDER: &str = "settings";
 
 pub struct Settings {
-    pub accounts: ConfigurationFile<AccountStorage>
+    pub accounts: ConfigurationFile<AccountStorage>,
+    pub games: ConfigurationFile<GameStorage>
 }
 
 pub struct ConfigurationFile<T: Serialize + DeserializeOwned> {
@@ -40,9 +43,11 @@ impl Settings {
         let base = base.join(SETTINGS_FOLDER);
 
         let accounts = Self::setup_file(&base, "accounts.json")?;
+        let games = Self::setup_file(&base, "games.json")?;
 
         Ok(Self {
             accounts,
+            games
         })
     }
 
@@ -50,6 +55,7 @@ impl Settings {
         where
             T: Serialize + DeserializeOwned + Default
     {
+        info!("Setting up file: {}", path.as_ref().display());
         let possible_file = Self::load_file(base, &path)?;
 
         let file = match possible_file {

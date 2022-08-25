@@ -1,5 +1,7 @@
+use std::fmt::Debug;
 use std::path::{PathBuf};
 use crate::version_manager::asset::VersionManifest;
+use serde::{Deserialize, Serialize};
 
 pub struct VersionConstruct {
     pub id: VersionId,
@@ -10,6 +12,7 @@ pub struct VersionConstruct {
     pub natives_temp_path: PathBuf,
 }
 
+#[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum VersionId {
     V1_19_2,
 }

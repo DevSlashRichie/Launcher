@@ -69,15 +69,12 @@ impl CodeProcessor {
     pub async fn process(&self, code: CodeToken) -> Result<(MinecraftProfile, MinecraftToken, OAuthToken), AuthError> {
 
         let auth_token = self.get_auth_token(code).await?;
-        let xbl_token = self.get_xbl_token(auth_token.clone()).await?;
-        let xsts_token = self.get_xsts_token(xbl_token).await?;
-        let minecraft_token = self.get_minecraft_token(xsts_token).await?;
-        let minecraft_profile = self.get_minecraft_profile(&minecraft_token).await?;
+        let (minecraft_token, minecraft_profile) = self.auth_minecraft_token(&auth_token).await?;
 
         Ok((minecraft_profile, minecraft_token, auth_token))
     }
 
-    pub async fn refresh_oauth(&self, auth_token: OAuthToken) -> Result<OAuthToken, AuthError> {
+    pub async fn refresh_oauth(&self, auth_token: &OAuthToken) -> Result<OAuthToken, AuthError> {
         let request = self.client
             .post(OAUTH_TOKEN_URL)
             .form(&[
@@ -92,8 +89,8 @@ impl CodeProcessor {
         self.extract_response(request, |err| AuthError::XBLError(err)).await
     }
 
-    pub async fn auth_minecraft_token(&self, auth_token: OAuthToken) -> Result<(MinecraftToken, MinecraftProfile), AuthError>{
-        let xbl_token = self.get_xbl_token(auth_token.clone()).await?;
+    pub async fn auth_minecraft_token(&self, auth_token: &OAuthToken) -> Result<(MinecraftToken, MinecraftProfile), AuthError>{
+        let xbl_token = self.get_xbl_token(auth_token).await?;
         let xsts_token = self.get_xsts_token(xbl_token).await?;
         let minecraft_token = self.get_minecraft_token(xsts_token).await?;
         let minecraft_profile = self.get_minecraft_profile(&minecraft_token).await?;
@@ -117,7 +114,7 @@ impl CodeProcessor {
         self.extract_response(request, |err| AuthError::XBLError(err)).await
     }
 
-    async fn get_xbl_token(&self, token: OAuthToken) -> Result<XBLToken, AuthError> {
+    async fn get_xbl_token(&self, token: &OAuthToken) -> Result<XBLToken, AuthError> {
         let token = format!("d={}", token.access_token);
         let request = self.client
             .post(XBL_TOKEN_URL)

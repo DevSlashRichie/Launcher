@@ -28,6 +28,10 @@ tokio = { version = "1.20.1", features = ["macros"] }
 sha1 = "0.10.1"
 url = "2.2.2"
 os_info = "3.5.0"
+futures = "0.3.23"
+tracing-subscriber = "0.3.15"
+tracing = "0.1.36"
+num_cpus = "1.13.1"
 
 [features]
 # by default Tauri runs in production mode
