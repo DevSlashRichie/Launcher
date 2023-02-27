@@ -1,11 +1,11 @@
-import {Dispatch, SetStateAction, useEffect, useRef, useState} from 'react';
+import { SetStateAction, useEffect, useRef, useState } from 'react';
 
 export function useOutsideClick(
     initialState: boolean,
     onOutsideClick?: () => void,
 ) {
 
-    const [ isActive, setIsActive ] = useState(initialState);
+    const [isActive, setIsActive] = useState(initialState);
 
     const el = useRef<HTMLDivElement>(null);
     const btnRef = useRef<HTMLDivElement>(null);
@@ -22,12 +22,12 @@ export function useOutsideClick(
     useEffect(() => {
         if (stateBlocker)
             return;
-        
+
         const onClick = (ev: MouseEvent) => {
             if (btnRef.current) {
                 if (btnRef.current.contains(ev.target as Node) || btnRef.current.isEqualNode(ev.target as Node)) {
                     setIsActive(old => {
-                        if(old) {
+                        if (old) {
                             onOutsideClick && onOutsideClick();
                         }
                         return !old;
@@ -39,7 +39,7 @@ export function useOutsideClick(
             if (el.current) {
                 if (!el.current.contains(ev.target as Node)) {
                     setIsActive(false);
-                    if(onOutsideClick) {
+                    if (onOutsideClick) {
                         onOutsideClick();
                     }
                 }
@@ -52,7 +52,7 @@ export function useOutsideClick(
             window.removeEventListener('click', onClick);
         };
 
-    }, [ isActive, el, btnRef, stateBlocker ]);
+    }, [isActive, el, btnRef, stateBlocker]);
 
     return { isActive, el, btnRef, setIsActive: handleActive };
 }

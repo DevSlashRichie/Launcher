@@ -1,10 +1,8 @@
-use serde::{Deserialize, Serialize};
 use crate::VersionId;
+use serde::{Deserialize, Serialize};
 
-pub const AVAILABLE_GAMES: &[(&str, &str, VersionId); 1] = &[
-    ("thebox_1.0", "The Box", VersionId::V1_19_2)
-];
-
+pub const AVAILABLE_GAMES: &[(&str, &str, VersionId); 1] =
+    &[("thebox_1.0", "The Box", VersionId::V1_19_3)];
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct GameStorage {
@@ -19,7 +17,6 @@ pub struct Game {
 }
 
 impl Game {
-
     pub fn from_static((id, name, version): &(&str, &str, VersionId)) -> Game {
         Game {
             id: id.to_string(),
@@ -27,5 +24,4 @@ impl Game {
             version: *version,
         }
     }
-
 }

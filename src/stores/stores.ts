@@ -8,7 +8,7 @@ export const useGames = create<GameStore>((set) => ({
     games: [] as Array<Game>,
 
     fetchGames: async () => {
-        const [ games, electedGame ] = await invoke<[ Array<Game>, string | undefined  ]>('get_games');
+        const [games, electedGame] = await invoke<[Array<Game>, string | undefined]>('get_games');
 
         const selectedGame = electedGame ? games.find(g => g.id === electedGame) : undefined;
 
@@ -21,8 +21,8 @@ export const useGames = create<GameStore>((set) => ({
     pickGame: (id: string) => {
         set(state => {
             const game = state.games.find(game => game.id === id);
-            
-            if(game) {
+
+            if (game) {
                 invoke('pick_game', {
                     id,
                 }).then();
@@ -53,7 +53,7 @@ export const useAccounts = create<AccountStore>(set => ({
 
         set(({ electedAccount, accounts }) => {
             const removeIsElected =
-                electedAccount && accounts[index] === electedAccount;
+                electedAccount && accounts[index].uuid === electedAccount.uuid;
 
             return {
                 accounts: accounts.filter((_, i) => i !== index),
@@ -75,19 +75,17 @@ export const useAccounts = create<AccountStore>(set => ({
                     (it: any) => it.profile.id === store.elected_account,
                 ),
             ].map(
-                (it: any) =>
-                    ({
-                        uuid: it.profile.id,
-                        username: it.profile.name,
-                    } as Account),
-            )[0];
-
-        const accounts: Array<Account> = store.accounts.map(
-            (it: any) =>
-                ({
+                (it: any) => ({
                     uuid: it.profile.id,
                     username: it.profile.name,
                 } as Account),
+            )[0];
+
+        const accounts: Array<Account> = store.accounts.map(
+            (it: any) => ({
+                uuid: it.profile.id,
+                username: it.profile.name,
+            } as Account),
         );
 
         set(() => ({

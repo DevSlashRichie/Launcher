@@ -1,7 +1,7 @@
-use std::collections::HashMap;
+use crate::auth_route::errors::AuthError;
 use regex::Regex;
 use serde::{Deserialize, Serialize};
-use crate::auth_route::errors::AuthError;
+use std::collections::HashMap;
 
 const CODE_PARAMS_REGEX: &str = r"[&?]((\w+)=([\w\d\.-]+))";
 
@@ -27,8 +27,7 @@ impl CodeToken {
         let regex = Regex::new(CODE_PARAMS_REGEX).unwrap();
         if regex.is_match(uri) {
             // extract code and state
-            let extracted_params = regex
-                .captures_iter(uri);
+            let extracted_params = regex.captures_iter(uri);
 
             let mut params = extracted_params
                 .map(|param| {
@@ -73,7 +72,7 @@ pub struct XBLToken {
     #[serde(rename = "NotAfter")]
     not_after: String,
     #[serde(rename = "Token")]
-    token: String,
+    pub token: String,
     #[serde(rename = "DisplayClaims")]
     display_claims: TokenDisplayClaims,
 }

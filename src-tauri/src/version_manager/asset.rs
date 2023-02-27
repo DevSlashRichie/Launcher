@@ -1,10 +1,11 @@
+use regex::Regex;
+use serde::de::{Error, MapAccess};
+use serde::{de, Deserialize, Deserializer, Serialize};
+use serde_json::Value;
 use std::fmt::Formatter;
 use std::iter::Map;
 use std::path::PathBuf;
-use regex::Regex;
-use serde::{de, Deserialize, Deserializer, Serialize};
-use serde::de::{Error, MapAccess};
-use serde_json::{Value};
+use std::str::FromStr;
 
 // ROOT
 #[derive(Serialize, Deserialize, Debug)]
@@ -35,6 +36,14 @@ pub enum Argument {
     },
 }
 
+impl FromStr for Argument {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Argument::Plain(s.to_string()))
+    }
+}
+
 #[derive(Serialize, Debug)]
 pub enum ArgumentValue {
     String(String),
@@ -43,7 +52,8 @@ pub enum ArgumentValue {
 
 impl<'de> de::Deserialize<'de> for Argument {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-        where D: Deserializer<'de>
+    where
+        D: Deserializer<'de>,
     {
         struct ArgumentVisitor;
 
@@ -54,30 +64,43 @@ impl<'de> de::Deserialize<'de> for Argument {
                 formatter.write_str("Argument")
             }
 
-            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E> where E: Error {
+            fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+            where
+                E: Error,
+            {
                 Ok(Argument::Plain(v.to_string()))
             }
 
-            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error> where A: MapAccess<'de> {
+            fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
                 if let Some(_) = map.next_key::<String>()? {
                     let rules: Vec<Rule> = map.next_value()?;
 
                     if let Some(_) = map.next_key::<String>()? {
                         let raw_value: Value = map.next_value()?;
                         let value = if raw_value.is_string() {
-                            Ok(ArgumentValue::String(raw_value.as_str().unwrap().to_string()))
+                            Ok(ArgumentValue::String(
+                                raw_value.as_str().unwrap().to_string(),
+                            ))
                         } else if raw_value.is_array() {
-                            Ok(ArgumentValue::Array(raw_value.as_array().unwrap().iter()
-                                .map(|x| x.as_str().unwrap().to_string())
-                                .collect::<Vec<_>>()))
+                            Ok(ArgumentValue::Array(
+                                raw_value
+                                    .as_array()
+                                    .unwrap()
+                                    .iter()
+                                    .map(|x| x.as_str().unwrap().to_string())
+                                    .collect::<Vec<_>>(),
+                            ))
                         } else {
-                            Err(Error::invalid_type(de::Unexpected::Other("not a string or array"), &"string or array"))?
+                            Err(Error::invalid_type(
+                                de::Unexpected::Other("not a string or array"),
+                                &"string or array",
+                            ))?
                         }?;
 
-                        Ok(Argument::WithRules {
-                            value,
-                            rules,
-                        })
+                        Ok(Argument::WithRules { value, rules })
                     } else {
                         return Err(Error::missing_field("value"));
                     }
@@ -109,7 +132,6 @@ pub struct Artifact {
 }
 
 impl Artifact {
-
     pub fn id(&self) -> String {
         if let Some(id) = self.id.as_ref() {
             id.clone()
@@ -156,8 +178,7 @@ impl Rule {
                 let current_arch = std::env::consts::ARCH;
                 arch == current_arch && self.action == "allow"
             } else if let Some(ver) = &os.version {
-                let regex = Regex::new(ver)
-                    .expect("Failed to compile version regex");
+                let regex = Regex::new(ver).expect("Failed to compile version regex");
                 let version = os_info::get().version().to_string();
                 regex.is_match(&version) && self.action == "allow"
             } else {

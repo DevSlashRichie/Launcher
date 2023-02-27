@@ -1,22 +1,21 @@
 #![cfg_attr(
-all(not(debug_assertions), target_os = "windows"),
-windows_subsystem = "windows"
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
 )]
 
 mod auth_route;
 mod files;
+mod oauth_plugin;
 mod version_manager;
 
-use tauri::http::ResponseBuilder;
-use tauri::Manager;
-use tracing::{info, error};
-use auth_route::auther;
-use crate::version_manager::version::VersionId;
-use crate::auth_route::code_extractor::CodeExtractor;
-use crate::auth_route::accounts::{AccountStorage, Account};
-use crate::version_manager::games::{AVAILABLE_GAMES, Game};
+use crate::auth_route::accounts::{Account, AccountStorage};
 use crate::files::settings::Settings;
 use crate::files::storage::Storage;
+use crate::version_manager::games::{Game, AVAILABLE_GAMES};
+use crate::version_manager::version::VersionId;
+use auth_route::auther;
+use tauri::Manager;
+use tracing::{error, info};
 
 const STORAGE_FOLDER: &str = ".cognatize";
 
@@ -75,7 +74,8 @@ fn get_games(handle: tauri::AppHandle) -> (Vec<Game>, Option<String>) {
     let storage = handle.state::<Storage>().inner().extract();
     let storage = storage.read().unwrap();
 
-    let games = AVAILABLE_GAMES.iter()
+    let games = AVAILABLE_GAMES
+        .iter()
         .map(|entry| Game::from_static(entry))
         .collect();
     (games, storage.settings.games.contents.elected_game.clone())
@@ -113,8 +113,12 @@ async fn start_game(handle: tauri::AppHandle) {
                     if let Some(game) = AVAILABLE_GAMES.iter().find(|it| it.0 == game.as_str()) {
                         let game = Game::from_static(game);
                         Some((account.clone(), assets, game))
-                    } else { None }
-                } else { None }
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
             } else {
                 None
             }
@@ -134,7 +138,12 @@ async fn start_game(handle: tauri::AppHandle) {
                         info!("Token has been updated");
                         let storage = source.extract();
                         let mut storage = storage.write().unwrap();
-                        let pos = storage.settings.accounts.contents.accounts.iter_mut()
+                        let pos = storage
+                            .settings
+                            .accounts
+                            .contents
+                            .accounts
+                            .iter_mut()
                             .position(|x| x.profile.id == account.profile.id)
                             .unwrap();
                         storage.settings.accounts.contents.accounts[pos] = account.clone();
@@ -156,16 +165,16 @@ fn main() {
     tracing_subscriber::fmt::init();
 
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![add_account, get_accounts, remove_account, elect_account, start_game, get_games, pick_game])
-        .register_uri_scheme_protocol("cognatize", |handle, req| {
-            CodeExtractor::config(handle, req.uri().to_string());
-
-            Ok(ResponseBuilder::new()
-                .status(200)
-                .body("You can close this page".as_bytes().to_vec())
-                .unwrap()
-            )
-        })
+        .plugin(oauth_plugin::init())
+        .invoke_handler(tauri::generate_handler![
+            add_account,
+            get_accounts,
+            remove_account,
+            elect_account,
+            start_game,
+            get_games,
+            pick_game
+        ])
         .setup(|app| {
             info!("Initializing Launcher");
             let storage = Storage::create(STORAGE_FOLDER)?;

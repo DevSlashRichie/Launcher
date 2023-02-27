@@ -33,7 +33,7 @@
         "icons/icon.icns",
         "icons/icon.ico"
       ],
-      "identifier": "com.tauri.dev",
+      "identifier": "com.panicsoda",
       "longDescription": "",
       "macOS": {
         "entitlements": null,
@@ -60,10 +60,10 @@
     "windows": [
       {
         "fullscreen": false,
-        "height": 820,
+        "height": 700,
         "resizable": false,
         "title": "Cognatize Launcher",
-        "width": 1080
+        "width": 600
       }
     ]
   }

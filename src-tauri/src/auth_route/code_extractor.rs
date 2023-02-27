@@ -1,9 +1,10 @@
-use std::sync::{Arc, Mutex};
+use crate::auth_route::tokens::CodeToken;
+use crate::oauth_plugin::start;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tauri::{AppHandle, Manager, Window, WindowBuilder, WindowEvent, WindowUrl};
-use crate::auth_route::tokens::CodeToken;
 
 const CODE_REPLACER: &str = "\
             if(location.href.includes('code=')) {
@@ -16,27 +17,40 @@ pub struct CodeExtractor {
     window: Window,
     stop_state: Arc<AtomicBool>,
     code_state: Arc<Mutex<Option<String>>>,
+    redirect_uri: String,
 }
 
 impl CodeExtractor {
-    pub fn new(window: Window) -> Self {
+    pub fn new(window: Window, redirect_uri: &str) -> Self {
         Self {
             window,
             stop_state: Arc::new(AtomicBool::new(false)),
             code_state: Arc::new(Mutex::new(None)),
+            redirect_uri: redirect_uri.to_string(),
         }
     }
 
     pub fn open(app_handle: &AppHandle, tag: &str, auth_url: &str) -> Self {
-        let window = WindowBuilder::new(app_handle, WINDOW_LABEL, WindowUrl::App("index.html".parse().unwrap()))
-            .title(tag)
-            .build()
-            .unwrap();
+        let window = WindowBuilder::new(
+            app_handle,
+            WINDOW_LABEL,
+            WindowUrl::App("index.html".parse().unwrap()),
+        )
+        .title(tag)
+        .build()
+        .unwrap();
 
         // We need to redirect it because the only way we can use custom schema is by using an App URL
-        window.eval(format!("location.replace('{}')", auth_url).as_str()).ok();
+        window
+            .eval(format!("location.replace('{}')", auth_url).as_str())
+            .ok();
 
-        Self::new(window)
+        let port = start(|url| {
+            println!("Callback found: {}", url);
+        })
+        .unwrap();
+
+        Self::new(window, &format!("localhost:{}", port))
     }
 
     pub async fn fetch(&self) -> Option<CodeToken> {
@@ -63,7 +77,6 @@ impl CodeExtractor {
             }
         });
 
-
         // Since tauri doesn't allow redirections without https scheme
         // we need to manually replace the location of the window
         // for our custom uri scheme listener to work correctly.
@@ -78,11 +91,10 @@ impl CodeExtractor {
             thread::sleep(Duration::from_millis(1000));
         }
 
-        self.code_state.lock()
+        self.code_state
+            .lock()
             .map_or(None, |mut state| state.take())
-            .map_or(None, |code| {
-                CodeToken::from_uri(code.as_str()).ok()
-            })
+            .map_or(None, |code| CodeToken::from_uri(code.as_str()).ok())
     }
 
     pub fn window(&self) -> &Window {

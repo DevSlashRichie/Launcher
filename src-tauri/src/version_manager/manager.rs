@@ -1,17 +1,19 @@
-use std::path::PathBuf;
-use std::{fs, io};
-use std::io::Write;
+use crate::version_manager::asset::{
+    Argument, ArgumentValue, Artifact, Version, VersionManifest, VersionsManifest,
+};
+use crate::version_manager::errors::ManagerError;
+use crate::version_manager::version::{VersionConstruct, VersionId};
+use crate::{auth_route, Account, Game};
 use futures::StreamExt;
 use regex::Regex;
 use serde_json::Value;
-use sha1::{Sha1, Digest};
+use sha1::{Digest, Sha1};
+use std::io::Write;
+use std::path::PathBuf;
+use std::{fs, io};
 use tauri::api::process::{Command, CommandEvent};
-use crate::{Account, auth_route, Game};
-use crate::version_manager::asset::{Argument, ArgumentValue, Artifact, Version, VersionManifest, VersionsManifest};
-use crate::version_manager::errors::ManagerError;
-use crate::version_manager::version::{VersionConstruct, VersionId};
 
-use tracing::{info, error, warn, span, instrument, Instrument};
+use tracing::{error, info, instrument, span, warn, Instrument};
 
 const VERSION_MANIFEST: &str = "https://launchermeta.mojang.com/mc/game/version_manifest.json";
 const MINECRAFT_RESOURCES: &str = "https://resources.download.minecraft.net/";
@@ -41,7 +43,8 @@ impl AssetManager {
     }
 
     async fn fetch_version_list() -> Result<VersionsManifest, ManagerError> {
-        let res = reqwest::get(VERSION_MANIFEST).await?
+        let res = reqwest::get(VERSION_MANIFEST)
+            .await?
             .json::<VersionsManifest>()
             .await?;
 
@@ -49,15 +52,16 @@ impl AssetManager {
     }
 
     async fn fetch_version(version: Version) -> Result<Vec<u8>, ManagerError> {
-        let res = reqwest::get(version.url)
-            .await?
-            .bytes()
-            .await?;
+        let res = reqwest::get(version.url).await?.bytes().await?;
 
         Ok(res.into())
     }
 
-    async fn get_manifest(&self, at: &PathBuf, version: &VersionId) -> Result<VersionManifest, ManagerError> {
+    async fn get_manifest(
+        &self,
+        at: &PathBuf,
+        version: &VersionId,
+    ) -> Result<VersionManifest, ManagerError> {
         let version_manifest = at.join("manifest.json");
 
         let manifest_bytes = match version_manifest.exists() {
@@ -68,7 +72,10 @@ impl AssetManager {
 
             false => {
                 let versions = Self::fetch_version_list().await?;
-                let version = versions.versions.into_iter().find(|v| v.id == version.to_string());
+                let version = versions
+                    .versions
+                    .into_iter()
+                    .find(|v| v.id == version.to_string());
 
                 if let Some(version) = version {
                     let version = Self::fetch_version(version).await?;
@@ -76,26 +83,28 @@ impl AssetManager {
                     fs::write(version_manifest, &version)?;
 
                     Some(version)
-                } else { None }
+                } else {
+                    None
+                }
             }
         };
 
-        let manifest = manifest_bytes
-            .map_or(Ok(None), |manifest| {
-                serde_json::from_slice::<VersionManifest>(&manifest)
-                    .map(Some)
-            })?;
+        let manifest = manifest_bytes.map_or(Ok(None), |manifest| {
+            serde_json::from_slice::<VersionManifest>(&manifest).map(Some)
+        })?;
 
         match manifest {
-            None => {
-                Err(ManagerError::NotFound)
-            }
+            None => Err(ManagerError::NotFound),
 
-            Some(manifest) => Ok(manifest)
+            Some(manifest) => Ok(manifest),
         }
     }
 
-    async fn should_download_artifact(&self, path: &PathBuf, artifact: &Artifact) -> Result<bool, ManagerError> {
+    async fn should_download_artifact(
+        &self,
+        path: &PathBuf,
+        artifact: &Artifact,
+    ) -> Result<bool, ManagerError> {
         if !path.exists() {
             Ok(true)
         } else {
@@ -157,7 +166,8 @@ impl AssetManager {
 
         // We check if the client is present
         info!("Performing client check");
-        self.review_file(&version.at, &manifest.downloads.client).await?;
+        self.review_file(&version.at, &manifest.downloads.client)
+            .await?;
 
         let lib_path = &version.libraries_path;
         if !lib_path.exists() {
@@ -170,18 +180,23 @@ impl AssetManager {
 
         // We check if the libs are present
         info!("Performing libraries check.");
-        let libraries = manifest.libraries.iter()
-            .filter(|lib|
-                lib.rules.is_none() || lib.rules
-                    .as_ref()
-                    .unwrap()
-                    .iter()
-                    .all(|rule| rule.is_valid())
-            )
+        let libraries = manifest
+            .libraries
+            .iter()
+            .filter(|lib| {
+                lib.rules.is_none()
+                    || lib
+                        .rules
+                        .as_ref()
+                        .unwrap()
+                        .iter()
+                        .all(|rule| rule.is_valid())
+            })
             .map(|lib| lib.downloads.artifact.clone())
             .collect::<Vec<_>>();
 
-        self.review_list_of_artifacts(lib_path.clone(), libraries).await?;
+        self.review_list_of_artifacts(lib_path.clone(), libraries)
+            .await?;
 
         let asset_index_path = &version.asset_path.join("indexes");
 
@@ -192,7 +207,8 @@ impl AssetManager {
         // We check if the assets are present
 
         info!("Performing asset index check.");
-        self.review_file(&asset_index_path, &manifest.asset_index).await?;
+        self.review_file(&asset_index_path, &manifest.asset_index)
+            .await?;
 
         let objects_path = version.asset_path.join("objects");
 
@@ -209,28 +225,31 @@ impl AssetManager {
         Ok(())
     }
 
-    async fn review_list_of_artifacts(&self, at: PathBuf, artifacts: Vec<Artifact>) -> Result<(), ManagerError> {
+    async fn review_list_of_artifacts(
+        &self,
+        at: PathBuf,
+        artifacts: Vec<Artifact>,
+    ) -> Result<(), ManagerError> {
         let buffer_size = num_cpus::get();
-        futures::stream::iter(artifacts.into_iter()
-            .map(|chunk| {
-                let manager = self.clone();
-                let path = at.clone();
-                tokio::spawn(async move {
-                    if let Err(err) = manager.review_file(&path, &chunk).await {
-                        error!("Artifact error check: {}", err);
-                    }
-                    chunk.id()
-                })
-            }))
-            .buffer_unordered(buffer_size)
-            .inspect(|name| {
-                match name {
-                    Ok(name) => info!("Artifact loaded: {}", name),
-                    Err(err) => error!("Error while reviewing artifact: {}", err),
-                };
+        futures::stream::iter(artifacts.into_iter().map(|chunk| {
+            let manager = self.clone();
+            let path = at.clone();
+            tokio::spawn(async move {
+                if let Err(err) = manager.review_file(&path, &chunk).await {
+                    error!("Artifact error check: {}", err);
+                }
+                chunk.id()
             })
-            .collect::<Vec<_>>()
-            .await;
+        }))
+        .buffer_unordered(buffer_size)
+        .inspect(|name| {
+            match name {
+                Ok(name) => info!("Artifact loaded: {}", name),
+                Err(err) => error!("Error while reviewing artifact: {}", err),
+            };
+        })
+        .collect::<Vec<_>>()
+        .await;
 
         Ok(())
     }
@@ -238,28 +257,43 @@ impl AssetManager {
     pub fn build_arguments(
         &self,
         version: VersionConstruct,
-        minecraft_account: Account,
-        game: Game,
+        minecraft_account: &Account,
+        game: &Game,
         instance_path: &PathBuf,
     ) -> Vec<String> {
         let regex_to_replace = Regex::new(r"\$\{([\S_]+)}").unwrap();
 
-        let class_path = version.manifest.libraries.iter()
+        let class_path_separator = if cfg!(target_os = "windows") {
+            ";"
+        } else {
+            ":"
+        };
+
+        let class_path = version
+            .manifest
+            .libraries
+            .iter()
             .filter(|lib| match &lib.rules {
                 None => true,
-                Some(rules) => rules.iter()
-                    .all(|x| x.is_valid()),
+                Some(rules) => rules.iter().all(|x| x.is_valid()),
             })
-            .filter_map(|lib| {
-                match &lib.downloads.artifact.path {
-                    Some(path) => Some(version.libraries_path.join(path).to_str().unwrap().to_string()),
-                    None => None
-                }
+            .filter_map(|lib| match &lib.downloads.artifact.path {
+                Some(path) => Some(
+                    version
+                        .libraries_path
+                        .join(path)
+                        .to_str()
+                        .unwrap()
+                        .to_string(),
+                ),
+                None => None,
             })
-            .map(|lib| lib + ":")
+            .map(|lib| lib + class_path_separator)
             .collect::<String>();
 
-        let client_path = version.at.join(version.manifest.downloads.client.file_name());
+        let client_path = version
+            .at
+            .join(version.manifest.downloads.client.file_name());
         let class_path = class_path + client_path.to_str().unwrap();
 
         // First we set the jvm parameters
@@ -268,21 +302,19 @@ impl AssetManager {
             .chain(&version.manifest.arguments.jvm)
             .chain(&vec![Argument::Plain(version.manifest.main_class.clone())])
             .chain(&version.manifest.arguments.game)
-            .flat_map(|arg|
-                match arg {
-                    Argument::Plain(value) => vec![value.clone()],
-                    Argument::WithRules { value, rules } => {
-                        if rules.iter().any(|rule| !rule.is_valid()) {
-                            vec![]
-                        } else {
-                            match value {
-                                ArgumentValue::String(arg) => vec![arg.clone()],
-                                ArgumentValue::Array(args) => args.clone(),
-                            }
+            .flat_map(|arg| match arg {
+                Argument::Plain(value) => vec![value.clone()],
+                Argument::WithRules { value, rules } => {
+                    if rules.iter().any(|rule| !rule.is_valid()) {
+                        vec![]
+                    } else {
+                        match value {
+                            ArgumentValue::String(arg) => vec![arg.clone()],
+                            ArgumentValue::Array(args) => args.clone(),
                         }
                     }
                 }
-            )
+            })
             .map(|arg| {
                 let group = regex_to_replace.captures(&arg);
 
@@ -293,18 +325,22 @@ impl AssetManager {
                         "version_name" => game.version.to_string(),
                         "game_directory" => instance_path.to_str().unwrap().to_string(),
                         "assets_root" => version.asset_path.to_str().unwrap().to_string(),
-                        "assets_index_name" => version.manifest.asset_index.id.as_ref().unwrap().clone(),
+                        "assets_index_name" => {
+                            version.manifest.asset_index.id.as_ref().unwrap().clone()
+                        }
                         "auth_uuid" => minecraft_account.profile.id.clone(),
                         "auth_access_token" => minecraft_account.mc.access_token.clone(),
-                        // "clientid" => "client_id_random".to_string(),
-                        // "auth_xuid" => "auth_xuid_random".to_string(),
+                        "clientid" => "".to_string(),
+                        "auth_xuid" => "".to_string(),
                         "user_type" => "mojang".to_string(),
                         "version_type" => "release".to_string(),
-                        "natives_directory" => version.natives_temp_path.to_str().unwrap().to_string(),
+                        "natives_directory" => {
+                            version.natives_temp_path.to_str().unwrap().to_string()
+                        }
                         "launcher_name" => "Cognatize".to_string(),
                         "launcher_version" => "1.0.0".to_string(),
                         "classpath" => class_path.clone(),
-                        _ => key.as_str().to_string()
+                        _ => key.as_str().to_string(),
                     };
 
                     regex_to_replace.replace(&arg, &replacement).to_string()
@@ -314,12 +350,16 @@ impl AssetManager {
             })
             .collect::<Vec<_>>();
 
+        println!("main class: {}", version.manifest.main_class);
         println!("{:?}", arguments.join(" "));
 
         arguments
     }
 
-    fn get_object_artifacts(&self, version: &VersionConstruct) -> Result<Vec<Artifact>, ManagerError> {
+    fn get_object_artifacts(
+        &self,
+        version: &VersionConstruct,
+    ) -> Result<Vec<Artifact>, ManagerError> {
         let file_name = version.manifest.asset_index.file_name();
         let index_file = version.asset_path.join("indexes").join(file_name);
         let load_file = fs::read(&index_file)?;
@@ -328,7 +368,8 @@ impl AssetManager {
         let objects = file["objects"].as_object().unwrap();
 
         // convert the objects to a list of artifacts
-        let artifacts = objects.iter()
+        let artifacts = objects
+            .iter()
             .map(|(key, value)| {
                 let hash = value.get("hash").unwrap().as_str().unwrap();
                 let sub = hash.chars().take(2).collect::<String>();
@@ -347,13 +388,13 @@ impl AssetManager {
             })
             .collect::<Vec<_>>();
 
-
         Ok(artifacts)
     }
 
-    async fn check_auth(&self, auth: &Account) -> Result<(), ManagerError>{
+    async fn check_auth(&self, auth: &Account) -> Result<(), ManagerError> {
         let start = std::time::SystemTime::now();
-        let now = start.duration_since(std::time::UNIX_EPOCH)
+        let now = start
+            .duration_since(std::time::UNIX_EPOCH)
             .expect("Time went backwards")
             .as_secs();
 
@@ -364,15 +405,25 @@ impl AssetManager {
         if now >= auth.mc_exp_time {
             auth_route::auther::auth_minecraft_token(&auth.auth).await?;
         }
-        
+
         Ok(())
     }
 
-    pub async fn load_version(&self, game: Game, minecraft_account: Account) -> Result<(), ManagerError> {
+    pub async fn load_version(
+        &self,
+        game: Game,
+        minecraft_account: Account,
+    ) -> Result<(), ManagerError> {
         let version = game.version;
         // Each game would contain a list of mods that need to be loaded across with resources.
 
-        info!("Starting game {} ({}) with account {} and version {}", &game.name, &game.id, &minecraft_account.profile.name, version.to_string());
+        info!(
+            "Starting game {} ({}) with account {} and version {}",
+            &game.name,
+            &game.id,
+            &minecraft_account.profile.name,
+            version.to_string()
+        );
         let version_path = self.versions.join(&version.to_string());
 
         if !version_path.exists() {
@@ -409,33 +460,37 @@ impl AssetManager {
         }
 
         info!("Loading arguments...");
-        let args = self.build_arguments(
-            construct,
-            minecraft_account,
-            game,
-            &instance_path,
-        );
+        let args = self.build_arguments(construct, &minecraft_account, &game, &instance_path);
 
         info!("Initializing Minecraft process...");
-        let handle = tokio::spawn(async move {
-            info!("Running Minecraft");
-            let (mut rx, _) = Command::new("java")
-                .args(args)
-                .current_dir(instance_path)
-                .spawn()
-                .expect("Failed to start java");
+        let handle = tokio::spawn(
+            async move {
+                info!("Running Minecraft");
+                let (mut rx, _) = Command::new("java")
+                    .args(args)
+                    .current_dir(instance_path)
+                    .spawn()
+                    .expect("Failed to start java");
 
-            while let Some(event) = rx.recv().await {
-                match event {
-                    CommandEvent::Stderr(err) => error!("{}", err),
-                    CommandEvent::Stdout(out) => info!("{}", out),
-                    CommandEvent::Error(err) => error!("{}", err),
-                    CommandEvent::Terminated(end) => info!("Terminated with code {:?}", end.code),
-                    event => println!("Unknown event: {:?}", event),
-                };
+                while let Some(event) = rx.recv().await {
+                    match event {
+                        CommandEvent::Stderr(err) => error!("{}", err),
+                        CommandEvent::Stdout(out) => info!("{}", out),
+                        CommandEvent::Error(err) => error!("{}", err),
+                        CommandEvent::Terminated(end) => {
+                            info!("Terminated with code {:?}", end.code)
+                        }
+                        event => println!("Unknown event: {:?}", event),
+                    };
+                }
             }
-        }.instrument(tracing::info_span!("MINECRAFT")));
-
+            .instrument(tracing::info_span!(
+                "minecraft",
+                game = &game.id,
+                version = &game.version.to_string(),
+                user_id = &minecraft_account.profile.id
+            )),
+        );
 
         let _ = tokio::join!(handle);
 

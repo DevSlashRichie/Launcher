@@ -15,12 +15,14 @@ pub struct VersionConstruct {
 #[derive(Debug, Serialize, Deserialize, Clone, Copy)]
 pub enum VersionId {
     V1_19_2,
+    V1_19_3,
 }
 
 impl ToString for VersionId {
     fn to_string(&self) -> String {
         match self {
             VersionId::V1_19_2 => "1.19.2".to_string(),
+            VersionId::V1_19_3 => "1.19.3".to_string(),
         }
     }
 }
